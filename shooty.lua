@@ -1,13 +1,11 @@
-
--- title:  game title
+-- title:  shooty
 -- author: Abiko
 -- desc:   short description
 -- script: lua
 
---system vars
+--system constants
 t=0
-poke(0x03FF8, 1)-- set border colour to 1 by poking vram
-debug=true --show dev barf?
+debug=true --enable dev barf?
 
 --control aliases
 PAD_UP=0
@@ -77,7 +75,7 @@ player={--initial player stats
 }
 ----
 
---not yet initialised
+--blank tables, kitchen sink
 bullet={}
 monster={}
 score=0
@@ -98,7 +96,7 @@ function TIC() --called 60 times per second
  updateBullet() --move bullets
  updateMonster() --move beasts
  cullEntities() --remove bullets that hit edges or monsters, and monsters that get shot or wander off
- if nextSpawn<=t and math.random(16)==1 then spawnMonster() end
+ if nextSpawn<=t and math.random(16)==1 then spawnController() end
  sniffControls() --accept input
  if debug==true then debugHUD() end
 end
@@ -114,6 +112,7 @@ function sniffControls()
  if btn(BUTTON_X) then player.aimLock=true else player.aimLock=false end
  if btnp(BUTTON_A,0,4) and player.ammo>0 then shoot() end
  if btnp(BUTTON_A,5,60) and player.ammo<1 then sfx(CLICK,'D-3',4,0,15,0) end
+ if btn(BUTTON_B) and debug==true then debugBanish() end
  if btn(PAD_UP) then
   player.posit.y=player.posit.y-1
   if not player.aimLock then player.facing=0 end
@@ -226,7 +225,7 @@ function updateBullet()
 end
 end
 ----
-function cullEntities()
+function cullEntities() --remove bullets that hit edges or monsters, and monsters that get shot or wander off
  for cb=1, 16 do
   if bullet[cb].active==true and bullet[cb].outOfBounds==true then
    bullet[cb].posit.x=BRAZIL
@@ -326,17 +325,16 @@ function updateMonster()
  end
 end
 
-function spawnMonster()
+function spawnController()
   for cm=1, 16 do
+   newSpawnSide=math.random(0,3)
    if monster[cm].alive==true then end
    if monster[cm].alive==false then
-   if monstersSpawned>5 then spawnInterval=300 end
-    monster[cm].posit.x=math.random(8,232)
-    monster[cm].posit.y=math.random(8,128)
-    monster[cm].alive=true
-    monster[cm].outOfBounds=false
+    if newSpawnSide==0 then spawnNorth(cm) return end
+    if newSpawnSide==1 then spawnEast(cm) return end
+    if newSpawnSide==2 then spawnSouth(cm) return end
+    if newSpawnSide==3 then spawnWest(cm) return end
     nextspawn=t+spawnInterval
-    monstersSpawned=monstersSpawned+1
    break
    end
   end
@@ -354,13 +352,61 @@ end
 
 
 function initialise()
+ poke(0x03FF8, BLUE)-- set the border value in vram to blue
  setupBullets()
- setupMonsters()
+ setupMonsters()--company's coming, set the tables~
  spawnInterval=4 --try to spawn a monster every 4 tics when starting
  monstersSpawned=0
  nextSpawn=t --start spawning immediately
  initialised=true
 end
 
-function zir()
+function addKillPoints()
+ score=score+100
+end
+
+function spawnNorth(cm)
+  monster[cm].posit.x=math.random(8,232)
+  monster[cm].posit.y=8
+  monster[cm].alive=true
+  monster[cm].outOfBounds=false
+  if monstersSpawned>5 then spawnInterval=300 end --After spawning five, throttle back the spawn rolls
+  nextspawn=t+spawnInterval
+  monstersSpawned=monstersSpawned+1
+end
+
+function spawnEast(cm)
+  monster[cm].posit.x=224
+  monster[cm].posit.y=math.random(8,128)
+  monster[cm].alive=true
+  monster[cm].outOfBounds=false
+  if monstersSpawned>5 then spawnInterval=300 end --After spawning five, throttle back the spawn rolls
+  nextspawn=t+spawnInterval
+  monstersSpawned=monstersSpawned+1
+end
+
+function spawnSouth(cm)
+  monster[cm].posit.x=math.random(8,232)
+  monster[cm].posit.y=120
+  monster[cm].alive=true
+  monster[cm].outOfBounds=false
+  if monstersSpawned>5 then spawnInterval=300 end --After spawning five, throttle back the spawn rolls
+  nextspawn=t+spawnInterval
+  monstersSpawned=monstersSpawned+1
+end
+
+function spawnWest(cm)
+  monster[cm].posit.x=8
+  monster[cm].posit.y=math.random(8,128)
+  monster[cm].alive=true
+  monster[cm].outOfBounds=false
+  if monstersSpawned>5 then spawnInterval=300 end --After spawning five, throttle back the spawn rolls
+  nextspawn=t+spawnInterval
+  monstersSpawned=monstersSpawned+1
+end
+
+function debugBanish() --set all monsters out of bounds so they're culled next tick
+ for cm=1, 16 do
+    monster[cm].outOfBounds=true
+ end
 end
