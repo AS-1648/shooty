@@ -44,6 +44,7 @@ SPR_AMMO_BOX=272
 GUNFIRE=0
 CLICK=1
 LOW_AMMO=2 --note: E-6
+PICKUP=3 --note: F#4
 --facing aliases
 UP=0
 DOWN=1
@@ -93,9 +94,11 @@ function TIC() --called 60 times per second
  drawBullet()
  drawMonster()
  drawHUD()
- updateBullet() --move bullets
- updateMonster() --move beasts
  cullEntities() --remove bullets that hit edges or monsters, and monsters that get shot or wander off
+ updateBullet() --move bullets
+ updateMonster()--move beasts
+ checkBulletCollision()
+ cullEntities() --do it twice per tic to be certain nothing outruns physics
  if nextSpawn<=t and math.random(16)==1 then spawnController() end
  sniffControls() --accept input
  if debug==true then debugHUD() end
@@ -111,8 +114,9 @@ end
 function sniffControls()
  if btn(BUTTON_X) then player.aimLock=true else player.aimLock=false end
  if btnp(BUTTON_A,0,4) and player.ammo>0 then shoot() end
- if btnp(BUTTON_A,5,60) and player.ammo<1 then sfx(CLICK,'D-3',4,0,15,0) end
+ if btnp(BUTTON_A,5,60) and player.ammo<1 then sfx(CLICK,'D-3',6,0,15,0) end
  if btn(BUTTON_B) and debug==true then debugBanish() end
+ if btn(BUTTON_Y) and debug==true then debugRearm() end
  if btn(PAD_UP) then
   player.posit.y=player.posit.y-1
   if not player.aimLock then player.facing=0 end
@@ -195,7 +199,7 @@ end
 function drawMonster()
   for cm=1, 16 do
 --    spr(SPR_MONSTER,monster[cm].posit.x,monster[cm].posit.y,0,1,0,0,1,1)
-    rect(monster[cm].posit.x,monster[cm].posit.y,8,8,RED)
+    rect(monster[cm].posit.x,monster[cm].posit.y,monster[cm].width,monster[cm].height,RED)
   end
 end
 
@@ -211,7 +215,7 @@ function updateBullet()
     bullet[cb].posit.x=bullet[cb].posit.x+bullet[cb].velocity
   end
   if bullet[cb].posit.x>239 then
-    bullet[cb].outOfBounds=true
+     bullet[cb].outOfBounds=true
   end
   if bullet[cb].posit.x<0 then
     bullet[cb].outOfBounds=true
@@ -220,20 +224,20 @@ function updateBullet()
     bullet[cb].outOfBounds=true
   end
   if bullet[cb].posit.y<0 then
-    bullet[cb].outOfBounds=true
+     bullet[cb].outOfBounds=true
   end
 end
 end
 ----
 function cullEntities() --remove bullets that hit edges or monsters, and monsters that get shot or wander off
  for cb=1, 16 do
-  if bullet[cb].active==true and bullet[cb].outOfBounds==true then
-   bullet[cb].posit.x=BRAZIL
-   bullet[cb].posit.y=BRAZIL
-   bullet[cb].velocity=0
-   bullet[cb].active=false
-   bullet[cb].outOfBounds=false
-  end
+   if bullet[cb].active==true and bullet[cb].outOfBounds==true then
+    bullet[cb].posit.x=BRAZIL                                      
+    bullet[cb].posit.y=BRAZIL                                      
+    bullet[cb].velocity=0
+    bullet[cb].active=false
+    bullet[cb].outOfBounds=false
+   end
   if bullet[cb].hit==true then
     bullet[cb].posit.x=BRAZIL
     bullet[cb].posit.y=BRAZIL
@@ -248,14 +252,15 @@ function cullEntities() --remove bullets that hit edges or monsters, and monster
    monster[cm].posit.x=(BRAZIL-255)
    monster[cm].posit.y=(BRAZIL-255)
    monster[cm].alive=false
-  end
+  break end
   if monster[cm].hit==true then
-    monster[cm].posit.x=(BRAZIL-255)
-    monster[cm].posit.y=(BRAZIL-255)
-    monster[cm].alive=false
+    monster[cm].posit.x=(BRAZIL-255) --keeping inactive beasts and bullets separate shouldn't matter
+    monster[cm].posit.y=(BRAZIL-255) --if you're only checking collision between active entities.
+    monster[cm].alive=false          --Collision here is cursed enough without being that specific, though.
     monster[cm].hit=false
-   end
-end
+    addKillPoints() --you got the badman, have a cookie
+   break end              --giving points for that here instead of on the collision
+end                 --to keep as few moving parts as possible on that function
 end
 
 function drawHUD()
@@ -298,10 +303,12 @@ function setupMonsters()
    monster[cm]={ --initial monster stats
    alive=false,
    hit=false,
+   width=8,
+   height=8,
    speed=0,
    outOfBounds=true,
    posit={
-    x=(BRAZIL-255),
+    x=(BRAZIL-255), 
     y=(BRAZIL-255)
    },
   }
@@ -340,12 +347,12 @@ function spawnController()
   end
  end
 
-function randomDrop()
-end
-
 function debugHUD()
   for ce=1, 16 do
-    print("B"..ce..": "..bullet[ce].posit.x..", "..bullet[ce].posit.y,0,(ce*8),DARK_GREY,true,1,true)
+    if bullet[ce].hit==true then BULLET_STATE_COLOUR=WHITE --print the bullet's coors in white if it's flagged as "hit"
+     else BULLET_STATE_COLOUR=DARK_GREY                    --to see if they're being flagged but not culled
+    end
+    print("B"..ce..": "..bullet[ce].posit.x..", "..bullet[ce].posit.y,0,(ce*8),BULLET_STATE_COLOUR,true,1,true)
     print("M"..ce..": "..monster[ce].posit.x..", "..monster[ce].posit.y,80,(ce*8),DARK_GREY,true,1,true)
   end
 end
@@ -362,7 +369,7 @@ function initialise()
 end
 
 function addKillPoints()
- score=score+100
+ score=score+1
 end
 
 function spawnNorth(cm)
@@ -409,4 +416,26 @@ function debugBanish() --set all monsters out of bounds so they're culled next t
  for cm=1, 16 do
     monster[cm].outOfBounds=true
  end
+end
+
+function debugRearm() --fully restock ammo
+ player.ammo=500
+ sfx(PICKUP,'F#4',6,1,15,0)
+end
+
+function checkBulletCollision() --see if any beasts get shot
+  for cb=1, 16 do
+    for cm=1, 16 do
+      if (bullet[cb].posit.x >= monster[cm].posit.x) then                             --if we're past the target's left edge in the X axis,
+        if (bullet[cb].posit.x <= (monster[cm].posit.x + monster[cm].width)) then     --and we're not past its right edge,
+          if (bullet[cb].posit.y >= monster[cm].posit.y) then                         --and we're lower than its top edge,
+            if (bullet[cb].posit.y <= (monster[cm].posit.y + monster[cm].height)) then--but higher than its bottom edge
+              monster[cm].hit=true                                                    --i hate looking at this but it works...
+              bullet[cb].hit=true  
+            break end--so the reason bullets weren't being culled when they should is because i had [cm] on both of these
+          end        --and shots'd only be culled if the monster and bullet colliding had the same index
+        end
+      end
+    end
+  end
 end
