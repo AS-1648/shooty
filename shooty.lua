@@ -6,6 +6,7 @@
 --system constants
 t=0
 debug=true --enable dev barf?
+markTime=false
 
 --control aliases
 PAD_UP=0
@@ -80,6 +81,9 @@ player={--initial player stats
 bullet={}
 monster={}
 score=0
+seconds=0
+minutes=0
+hours=0
 hasBeenWarned=false
 initialised=false
 
@@ -88,21 +92,37 @@ function TIC() --called 60 times per second
   initialise()
  end
  t=t+1 --master timer
+ clock() --turn tick counter into people time
  cls(0) --screen refresh
  borderWatch() --keep player in bounds
  drawPlayer()
  drawBullet()
  drawMonster()
  drawHUD()
- cullEntities() --remove bullets that hit edges or monsters, and monsters that get shot or wander off
- updateBullet() --move bullets
- updateMonster()--move beasts
- checkBulletCollision()
- cullEntities() --do it twice per tic to be certain nothing outruns physics
- if nextSpawn<=t and math.random(16)==1 then spawnController() end
+ if not markTime==true then
+  cullEntities() --remove bullets that hit edges or monsters, and monsters that get shot or wander off
+  updateBullet() --move bullets
+  updateMonster()--move beasts
+  checkBulletCollision()
+  cullEntities() --do it twice per tic to be certain nothing outruns physics
+  if nextSpawn<=t and math.random(16)==1 then spawnController() end
+  end
  sniffControls() --accept input
  if debug==true then debugHUD() end
 end
+
+function clock()
+  if t%60==0 then seconds=seconds+1 end
+  if seconds==60 then
+    seconds=0
+    minutes=minutes+1
+  end
+  if minutes==60 then
+    hours=minutes+1
+    minutes=0
+  end
+end
+
 ----
 function borderWatch()
  if player.posit.x<=0 then player.posit.x=1 end
