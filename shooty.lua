@@ -325,7 +325,10 @@ function setupMonsters()
    hit=false,
    width=8,
    height=8,
-   speed=0,
+   speedX=0,
+   speedY=0,
+   intent=0, --0: wait, 1: north, 2: east, 3: south, 4: west
+   wakeUpTic=0, --tic number where this monster will start rolling intent
    outOfBounds=true,
    posit={
     x=(BRAZIL-255), 
