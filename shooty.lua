@@ -6,7 +6,7 @@
 --system constants
 t=0
 gt=0 --tics elapsed in current life
-debug=true --enable dev barf?
+debug=false --enable dev barf?
 markTime=false
 
 --control aliases
@@ -82,6 +82,8 @@ player={--initial player stats
 
 pickup={--initial stats of the ammo box
  active=false,
+ width=5,
+ height=5,
  posit={
   x=BRAZIL,
   y=BRAZIL
@@ -118,12 +120,11 @@ function TIC() --called 60 times per second
  if not markTime==true then
   gt=gt+1
   cullEntities() --remove bullets that hit edges or monsters, items that get taken, and monsters that get shot or wander off
-  updateItems()
   updateBullet() --move bullets
   updateMonster()--move beasts
   updateSparks() --delete sparks as needed
   checkBulletCollision()
-  --checkPlayerCollision()
+  checkPlayerCollision()
   cullEntities() --do it twice per tic to be certain nothing outruns physics
   if nextSpawn<=t and math.random(16)==1 then spawnController() end
   end
@@ -408,7 +409,7 @@ function updateMonster()
    nASy=monster[cm].posit.y
    createAggroSpark(nASx,nASy)
  end
-  if t%4~=0 and gt>monster[cm].wakeUpTic and monster[cm].alive==true then -- only move if your wakeup time has passed and you're alive
+  if t%3~=0 and gt>monster[cm].wakeUpTic and monster[cm].alive==true then -- only move if your wakeup time has passed and you're alive
    if monster[cm].posit.x>player.posit.x then monster[cm].posit.x = monster[cm].posit.x-1 end
    if monster[cm].posit.x<player.posit.x then monster[cm].posit.x = monster[cm].posit.x+1 end
    if monster[cm].posit.y>player.posit.y then monster[cm].posit.y = monster[cm].posit.y-1 end
@@ -526,15 +527,20 @@ function spawnWest(cm)
   createSpawnSpark(nSSx, nSSy)
 end
 
-function banish() --set all monsters out of bounds so they're culled next tick
+function banish() --reset player, monsters, score, ammo
  for cm=1, 16 do
     monster[cm].outOfBounds=true
  end
+ rearm()
+ score=0
+ gt=0
+ initialise() --using this for this purpose feels wrong somehow
 end
 
 function rearm() --fully restock ammo
  player.ammo=500
  sfx(PICKUP,'F#4',6,1,15,0)
+ pickup.active=false
 end
 
 function checkBulletCollision() --see if any beasts get shot
@@ -601,9 +607,6 @@ function drawSparks()
  end
 end
 
-function updateItems()
-end
-
 function updateSparks()
  for cS=1, 32 do
   if spawnSpark[cS].active==true and gt>spawnSpark[cS].nextUpdate then
@@ -616,5 +619,29 @@ function updateSparks()
    aggroSpark[cS].nextUpdate=aggroSpark[cS].nextUpdate+5
   end
   if aggroSpark[cS].stage>4 then aggroSpark[cS].active=false and aggroSpark[cS].stage==0 end
+ end
+end
+
+function checkPlayerCollision()-- with monsters and pickups TODO: find out why sometimes there is no collision
+ local playerX1=player.posit.x
+ local playerX2=player.posit.x+player.width
+ local playerY1=player.posit.y
+ local playerY2=player.posit.y+player.height
+ local pickupX1=pickup.posit.x
+ local pickupX2=pickup.posit.x+pickup.width
+ local pickupY1=pickup.posit.y
+ local pickupY2=pickup.posit.y+pickup.height
+ if playerX1 <= pickupX2 and playerX2 >= pickupX1
+  then if playerY1 <=pickupY2 and playerY2 >= pickupY1 then rearm() end
+ end
+ for cm=1, 16 do
+  if monster[cm].aggro==false then break end
+  local monsterX1 = monster[cm].posit.x
+  local monsterX2 = monster[cm].posit.x+monster[cm].width
+  local monsterY1 = monster[cm].posit.y
+  local monsterY2 = monster[cm].posit.y+monster[cm].height
+  if playerX1 <= monsterX2 and playerX2 >= monsterX1
+   then if playerY1 <= monsterY2 and playerY2 >= monsterY1 then banish() end
+  end
  end
 end
