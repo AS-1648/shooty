@@ -5,6 +5,7 @@
 
 --system constants
 t=0
+gt=0 --tics elapsed in current life
 debug=true --enable dev barf?
 markTime=false
 
@@ -17,7 +18,7 @@ BUTTON_A=4
 BUTTON_B=5
 BUTTON_X=6
 BUTTON_Y=7
---colour aliases
+--colour aliases 
 BLACK=0
 PURPLE=1
 RED=2
@@ -41,6 +42,8 @@ SPR_PLAYER_LEFT=258
 SPR_PLAYER_RIGHT=259
 SPR_MONSTER=260
 SPR_AMMO_BOX=272
+SPR_SPAWN_SPARK=288
+SPR_AGGRO_SPARK=304
 --sound aliases
 GUNFIRE=0
 CLICK=1
@@ -64,15 +67,24 @@ MUZZLE_LEFT_Y=4
 MUZZLE_RIGHT_X=8
 MUZZLE_RIGHT_Y=4
 
-
 player={--initial player stats
  aimLock=false,
  facing=0,
  ammo=500,
  kills=0,
+ width=5,
+ height=5,
  posit={
   x=120,
   y=68
+ }
+}
+
+pickup={--initial stats of the ammo box
+ active=false,
+ posit={
+  x=BRAZIL,
+  y=BRAZIL
  }
 }
 ----
@@ -80,6 +92,8 @@ player={--initial player stats
 --blank tables, kitchen sink
 bullet={}
 monster={}
+spawnSpark={}
+aggroSpark={}
 score=0
 seconds=0
 minutes=0
@@ -98,12 +112,18 @@ function TIC() --called 60 times per second
  drawPlayer()
  drawBullet()
  drawMonster()
+ drawItems()
+ drawSparks()
  drawHUD()
  if not markTime==true then
-  cullEntities() --remove bullets that hit edges or monsters, and monsters that get shot or wander off
+  gt=gt+1
+  cullEntities() --remove bullets that hit edges or monsters, items that get taken, and monsters that get shot or wander off
+  updateItems()
   updateBullet() --move bullets
   updateMonster()--move beasts
+  updateSparks() --delete sparks as needed
   checkBulletCollision()
+  --checkPlayerCollision()
   cullEntities() --do it twice per tic to be certain nothing outruns physics
   if nextSpawn<=t and math.random(16)==1 then spawnController() end
   end
@@ -124,7 +144,7 @@ function clock()
 end
 
 ----
-function borderWatch()
+function borderWatch() --keep player in bounds
  if player.posit.x<=0 then player.posit.x=1 end
  if player.posit.x>=233 then player.posit.x=232 end
  if player.posit.y<=0 then player.posit.y=1 end
@@ -135,8 +155,8 @@ function sniffControls()
  if btn(BUTTON_X) then player.aimLock=true else player.aimLock=false end
  if btnp(BUTTON_A,0,4) and player.ammo>0 then shoot() end
  if btnp(BUTTON_A,5,60) and player.ammo<1 then sfx(CLICK,'D-3',6,0,15,0) end
- if btn(BUTTON_B) and debug==true then debugBanish() end
- if btn(BUTTON_Y) and debug==true then debugRearm() end
+ if btn(BUTTON_B) and debug==true then banish() end
+ if btn(BUTTON_Y) and debug==true then rearm() end
  if btn(PAD_UP) then
   player.posit.y=player.posit.y-1
   if not player.aimLock then player.facing=0 end
@@ -219,7 +239,7 @@ end
 function drawMonster()
   for cm=1, 16 do
 --    spr(SPR_MONSTER,monster[cm].posit.x,monster[cm].posit.y,0,1,0,0,1,1)
-    rect(monster[cm].posit.x,monster[cm].posit.y,monster[cm].width,monster[cm].height,RED)
+    rect(monster[cm].posit.x,monster[cm].posit.y,monster[cm].width,monster[cm].height,monster[cm].colour)
   end
 end
 
@@ -272,15 +292,30 @@ function cullEntities() --remove bullets that hit edges or monsters, and monster
    monster[cm].posit.x=(BRAZIL-255)
    monster[cm].posit.y=(BRAZIL-255)
    monster[cm].alive=false
+   monster[cm].aggro=false
   break end
   if monster[cm].hit==true then
+    if gt>monster[cm].wakeUpTic and pickup.active==false and math.random(0,3)==0 then --25% chance to drop the ammo box if a red monster is shot (only active ones can drop to keep them off the monster spawns)
+     pickup.active=true
+     pickup.posit.x = monster[cm].posit.x
+     pickup.posit.y = monster[cm].posit.y
+    end
     monster[cm].posit.x=(BRAZIL-255) --keeping inactive beasts and bullets separate shouldn't matter
     monster[cm].posit.y=(BRAZIL-255) --if you're only checking collision between active entities.
     monster[cm].alive=false          --Collision here is cursed enough without being that specific, though.
     monster[cm].hit=false
+    monster[cm].aggro=false
     addKillPoints() --you got the badman, have a cookie
    break end              --giving points for that here instead of on the collision
 end                 --to keep as few moving parts as possible on that function
+ if pickup.active==false then
+  pickup.posit.x=BRAZIL
+  pickup.posit.y=BRAZIL
+ end
+end
+
+function drawItems()
+ spr(SPR_AMMO_BOX,pickup.posit.x,pickup.posit.y,0)
 end
 
 function drawHUD()
@@ -325,11 +360,10 @@ function setupMonsters()
    hit=false,
    width=8,
    height=8,
-   speedX=0,
-   speedY=0,
-   intent=0, --0: wait, 1: north, 2: east, 3: south, 4: west
-   wakeUpTic=0, --tic number where this monster will start rolling intent
+   wakeUpTic=1,
    outOfBounds=true,
+   colour=0,
+   aggro=false,
    posit={
     x=(BRAZIL-255), 
     y=(BRAZIL-255)
@@ -338,8 +372,49 @@ function setupMonsters()
   end
 end
 
+function setupSparks()
+ for cS=1, 32 do --"current aggro spark"; we have 32 of these so they shouldn't run out
+  aggroSpark[cS]={
+   active=false,
+   stage=0,
+   nextUpdate=0,
+   frame=SPR_AGGRO_SPARK,
+   posit={
+    x=BRAZIL,
+    y=BRAZIL
+   },
+ }
+  spawnSpark[cS]={
+   active=false,
+   stage=0,
+   nextUpdate=0,
+   frame=SPR_SPAWN_SPARK,
+   posit={
+    x=BRAZIL,
+    y=BRAZIL
+   },
+ }
+ end
+end
+
 function updateMonster()
  for cm=1, 16 do
+  if monster[cm].aggro==false then monster[cm].colour=BLUE end
+  --i just want to get the space beasts moving at this point so a more elegant solution can wait on me remembering how math works
+  --TODO: add a var for each monster to define whether it goes for pure pursuit or lead pursuit, and respect that here
+  if gt>monster[cm].wakeUpTic and monster[cm].aggro==false and monster[cm].alive==true  then 
+   monster[cm].colour=RED
+   monster[cm].aggro=true
+   nASx=monster[cm].posit.x
+   nASy=monster[cm].posit.y
+   createAggroSpark(nASx,nASy)
+ end
+  if t%4~=0 and gt>monster[cm].wakeUpTic and monster[cm].alive==true then -- only move if your wakeup time has passed and you're alive
+   if monster[cm].posit.x>player.posit.x then monster[cm].posit.x = monster[cm].posit.x-1 end
+   if monster[cm].posit.x<player.posit.x then monster[cm].posit.x = monster[cm].posit.x+1 end
+   if monster[cm].posit.y>player.posit.y then monster[cm].posit.y = monster[cm].posit.y-1 end
+   if monster[cm].posit.y<player.posit.y then monster[cm].posit.y = monster[cm].posit.y+1 end
+  end
   if monster[cm].posit.x>239 then
    monster[cm].outOfBounds=true
   end
@@ -353,13 +428,14 @@ function updateMonster()
    monster[cm].outOfBounds=true
   end
  end
-end
+end--updateMonster()
 
 function spawnController()
   for cm=1, 16 do
    newSpawnSide=math.random(0,3)
    if monster[cm].alive==true then end
    if monster[cm].alive==false then
+    monster[cm].wakeUpTic=(gt+math.random(30,180)) -- wait somewhere between half a second and three seconds to start moving
     if newSpawnSide==0 then spawnNorth(cm) return end
     if newSpawnSide==1 then spawnEast(cm) return end
     if newSpawnSide==2 then spawnSouth(cm) return end
@@ -381,13 +457,23 @@ function debugHUD()
 end
 
 
+function restart()
+ banish()
+ rearm()
+ player.kills=0
+ player.posit.x=120
+ player.posit.y=68
+end
+
 function initialise()
  poke(0x03FF8, BLUE)-- set the border value in vram to blue
+ setupSparks()
  setupBullets()
  setupMonsters()--company's coming, set the tables~
  spawnInterval=4 --try to spawn a monster every 4 tics when starting
  monstersSpawned=0
  nextSpawn=t --start spawning immediately
+ markTime=false
  initialised=true
 end
 
@@ -403,6 +489,7 @@ function spawnNorth(cm)
   if monstersSpawned>5 then spawnInterval=300 end --After spawning five, throttle back the spawn rolls
   nextspawn=t+spawnInterval
   monstersSpawned=monstersSpawned+1
+  createSpawnSpark(monster[cm].posit.x,monster[cm].posit.y)
 end
 
 function spawnEast(cm)
@@ -413,6 +500,7 @@ function spawnEast(cm)
   if monstersSpawned>5 then spawnInterval=300 end --After spawning five, throttle back the spawn rolls
   nextspawn=t+spawnInterval
   monstersSpawned=monstersSpawned+1
+  createSpawnSpark(monster[cm].posit.x,monster[cm].posit.y)
 end
 
 function spawnSouth(cm)
@@ -423,6 +511,7 @@ function spawnSouth(cm)
   if monstersSpawned>5 then spawnInterval=300 end --After spawning five, throttle back the spawn rolls
   nextspawn=t+spawnInterval
   monstersSpawned=monstersSpawned+1
+  createSpawnSpark(monster[cm].posit.x,monster[cm].posit.y)
 end
 
 function spawnWest(cm)
@@ -433,15 +522,18 @@ function spawnWest(cm)
   if monstersSpawned>5 then spawnInterval=300 end --After spawning five, throttle back the spawn rolls
   nextspawn=t+spawnInterval
   monstersSpawned=monstersSpawned+1
+  nSSx=monster[cm].posit.x
+  nSSy=monster[cm].posit.y
+  createSpawnSpark(nSSx, nSSy)
 end
 
-function debugBanish() --set all monsters out of bounds so they're culled next tick
+function banish() --set all monsters out of bounds so they're culled next tick
  for cm=1, 16 do
     monster[cm].outOfBounds=true
  end
 end
 
-function debugRearm() --fully restock ammo
+function rearm() --fully restock ammo
  player.ammo=500
  sfx(PICKUP,'F#4',6,1,15,0)
 end
@@ -449,7 +541,7 @@ end
 function checkBulletCollision() --see if any beasts get shot
   for cb=1, 16 do
     for cm=1, 16 do
-      if (bullet[cb].posit.x >= monster[cm].posit.x) then                             --if we're past the target's left edge in the X axis,
+      if (bullet[cb].posit.x >= monster[cm].posit.x) and bullet[cb].active==true and monster[cm].alive==true then                             --if we're past the target's left edge in the X axis,
         if (bullet[cb].posit.x <= (monster[cm].posit.x + monster[cm].width)) then     --and we're not past its right edge,
           if (bullet[cb].posit.y >= monster[cm].posit.y) then                         --and we're lower than its top edge,
             if (bullet[cb].posit.y <= (monster[cm].posit.y + monster[cm].height)) then--but higher than its bottom edge
@@ -461,4 +553,69 @@ function checkBulletCollision() --see if any beasts get shot
       end
     end
   end
+end
+
+function createAggroSpark(nASx, nASy)
+ for cAS=1, 32 do
+  if aggroSpark[cAS].active==true then end
+  if not aggroSpark[cAS].active==true then
+   aggroSpark[cAS].active=true
+   aggroSpark[cAS].stage=0
+   aggroSpark[cAS].nextUpdate=gt+10
+   spawnSpark[cAS].frame=SPR_AGGRO_SPARK
+   aggroSpark[cAS].posit.x=nASx
+   aggroSpark[cAS].posit.y=nASy
+   break
+  end
+ end
+end
+
+function createSpawnSpark(nSSx, nSSy)
+ for cSS=1, 32 do
+  if spawnSpark[cSS].active==true then end
+  if not spawnSpark[cSS].active==true then
+   spawnSpark[cSS].active=true
+   spawnSpark[cSS].stage=0
+   spawnSpark[cSS].nextUpdate=gt+10
+   spawnSpark[cSS].frame=SPR_SPAWN_SPARK
+   spawnSpark[cSS].posit.x=nSSx
+   spawnSpark[cSS].posit.y=nSSy
+   break
+  end
+ end
+end
+
+function drawSparks()
+ for cS=1, 32 do
+  if spawnSpark[cS].active==true then
+   local offsetSSparkFrame=SPR_SPAWN_SPARK+spawnSpark[cS].stage
+   local sSparkX=spawnSpark[cS].posit.x
+   local sSparkY=spawnSpark[cS].posit.y
+   spr(offsetSSparkFrame,sSparkX,sSparkY,0)
+  end
+  if aggroSpark[cS].active==true then
+   local offsetASparkFrame=SPR_AGGRO_SPARK+aggroSpark[cS].stage
+   local aSparkX=aggroSpark[cS].posit.x
+   local aSparkY=aggroSpark[cS].posit.y
+   spr(offsetASparkFrame,aSparkX,aSparkY,0)
+  end
+ end
+end
+
+function updateItems()
+end
+
+function updateSparks()
+ for cS=1, 32 do
+  if spawnSpark[cS].active==true and gt>spawnSpark[cS].nextUpdate then
+   spawnSpark[cS].stage=spawnSpark[cS].stage+1
+   spawnSpark[cS].nextUpdate=spawnSpark[cS].nextUpdate+5
+  end
+  if spawnSpark[cS].stage>4 then spawnSpark[cS].active=false and spawnSpark[cS].stage==0 end
+  if aggroSpark[cS].active==true and gt>aggroSpark[cS].nextUpdate then
+   aggroSpark[cS].stage=aggroSpark[cS].stage+1
+   aggroSpark[cS].nextUpdate=aggroSpark[cS].nextUpdate+5
+  end
+  if aggroSpark[cS].stage>4 then aggroSpark[cS].active=false and aggroSpark[cS].stage==0 end
+ end
 end
