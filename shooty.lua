@@ -238,7 +238,6 @@ end
 ----
 function drawMonster()
   for cm=1, 16 do
---    spr(SPR_MONSTER,monster[cm].posit.x,monster[cm].posit.y,0,1,0,0,1,1)
     rect(monster[cm].posit.x,monster[cm].posit.y,monster[cm].width,monster[cm].height,monster[cm].colour)
   end
 end
@@ -266,7 +265,7 @@ function updateBullet()
   if bullet[cb].posit.y<0 then
      bullet[cb].outOfBounds=true
   end
-end
+ end
 end
 ----
 function cullEntities() --remove bullets that hit edges or monsters, and monsters that get shot or wander off
@@ -306,8 +305,8 @@ function cullEntities() --remove bullets that hit edges or monsters, and monster
     monster[cm].hit=false
     monster[cm].aggro=false
     addKillPoints() --you got the badman, have a cookie
-   break end              --giving points for that here instead of on the collision
-end                 --to keep as few moving parts as possible on that function
+  break end              --giving points for that here instead of on the collision
+ end                 --to keep as few moving parts as possible on that function
  if pickup.active==false then
   pickup.posit.x=BRAZIL
   pickup.posit.y=BRAZIL
@@ -334,7 +333,7 @@ function drawHUD()
    print("AMMO: "..player.ammo,120,119,LIGHT_GREEN,false,1,false)
   end
   print("SCOR: "..score,120,127,LIGHT_GREEN,false,1,false)
- end
+end
 
 function setupBullets()
  for cb=1, 16 do --"cb" = "current bullet"
@@ -444,7 +443,7 @@ function spawnController()
    break
    end
   end
- end
+end
 
 function debugHUD()
   for ce=1, 16 do
