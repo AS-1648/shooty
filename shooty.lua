@@ -364,6 +364,14 @@ function setupMonsters()
    outOfBounds=true,
    colour=0,
    aggro=false,
+   speed=1.3,
+   retargetInterval=math.random(0,120), --how many tics since last player posit check must pass before the next check
+   trackingError=math.random(0,20), --how much the target posit can deviate from player posit
+   nextRecheck=0,
+   targetPosit={
+    x=0,
+    y=0
+   },
    posit={
     x=(BRAZIL-255), 
     y=(BRAZIL-255)
@@ -402,6 +410,7 @@ function updateMonster()
   if monster[cm].aggro==false then monster[cm].colour=BLUE end
   --i just want to get the space beasts moving at this point so a more elegant solution can wait on me remembering how math works
   --TODO: add a var for each monster to define whether it goes for pure pursuit or lead pursuit, and respect that here
+  --^ lol disregard that, buckshot's funnier
   if gt>monster[cm].wakeUpTic and monster[cm].aggro==false and monster[cm].alive==true  then 
    monster[cm].colour=RED
    monster[cm].aggro=true
@@ -410,10 +419,10 @@ function updateMonster()
    createAggroSpark(nASx,nASy)
  end
   if t%3~=0 and gt>monster[cm].wakeUpTic and monster[cm].alive==true then -- only move if your wakeup time has passed and you're alive
-   if monster[cm].posit.x>player.posit.x then monster[cm].posit.x = monster[cm].posit.x-1 end
-   if monster[cm].posit.x<player.posit.x then monster[cm].posit.x = monster[cm].posit.x+1 end
-   if monster[cm].posit.y>player.posit.y then monster[cm].posit.y = monster[cm].posit.y-1 end
-   if monster[cm].posit.y<player.posit.y then monster[cm].posit.y = monster[cm].posit.y+1 end
+   if monster[cm].posit.x>monster[cm].targetPosit.x then monster[cm].posit.x = monster[cm].posit.x-monster[cm].speed end
+   if monster[cm].posit.x<monster[cm].targetPosit.x then monster[cm].posit.x = monster[cm].posit.x+monster[cm].speed end
+   if monster[cm].posit.y>monster[cm].targetPosit.y then monster[cm].posit.y = monster[cm].posit.y-monster[cm].speed end
+   if monster[cm].posit.y<monster[cm].targetPosit.y then monster[cm].posit.y = monster[cm].posit.y+monster[cm].speed end
   end
   if monster[cm].posit.x>239 then
    monster[cm].outOfBounds=true
@@ -426,6 +435,11 @@ function updateMonster()
   end
   if monster[cm].posit.y<0 then
    monster[cm].outOfBounds=true
+  end
+  if gt >= monster[cm].nextRecheck then
+   monster[cm].targetPosit.x = player.posit.x + math.random(-(monster[cm].trackingError),(monster[cm].trackingError))
+   monster[cm].targetPosit.y = player.posit.y + math.random(-(monster[cm].trackingError),(monster[cm].trackingError))
+   monster[cm].nextRecheck=monster[cm].nextRecheck+monster[cm].retargetInterval
   end
  end
 end--updateMonster()
@@ -455,7 +469,6 @@ function debugHUD()
     print("M"..ce..": "..monster[ce].posit.x..", "..monster[ce].posit.y,80,(ce*8),DARK_GREY,true,1,true)
   end
 end
-
 
 function restart()
  banish()
