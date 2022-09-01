@@ -8,6 +8,7 @@ t=0
 gt=0 --tics elapsed in current life
 debug=false --enable dev barf?
 markTime=false
+monsterCap=32
 
 --control aliases
 PAD_UP=0
@@ -238,7 +239,7 @@ function drawPlayer()
 end
 ----
 function drawMonster()
-  for cm=1, 16 do
+  for cm=1, monsterCap do
     rect(monster[cm].posit.x,monster[cm].posit.y,monster[cm].width,monster[cm].height,monster[cm].colour)
   end
 end
@@ -287,7 +288,7 @@ function cullEntities() --remove bullets that hit edges or monsters, and monster
     bullet[cb].hit=false
    end
  end
- for cm=1, 16 do
+ for cm=1, monsterCap do
   if monster[cm].outOfBounds==true and monster[cm].alive==true then
    monster[cm].posit.x=(BRAZIL-255)
    monster[cm].posit.y=(BRAZIL-255)
@@ -354,7 +355,7 @@ function setupBullets()
 end
 
 function setupMonsters()
-  for cm=1, 16 do --"cm" = "current monster"
+  for cm=1, monsterCap do --"cm" = "current monster"
    monster[cm]={ --initial monster stats
    alive=false,
    hit=false,
@@ -406,7 +407,7 @@ function setupSparks()
 end
 
 function updateMonster()
- for cm=1, 16 do
+ for cm=1, monsterCap do
   if monster[cm].aggro==false then monster[cm].colour=BLUE end
   --i just want to get the space beasts moving at this point so a more elegant solution can wait on me remembering how math works
   --TODO: add a var for each monster to define whether it goes for pure pursuit or lead pursuit, and respect that here
@@ -445,7 +446,7 @@ function updateMonster()
 end--updateMonster()
 
 function spawnController()
-  for cm=1, 16 do
+  for cm=1, monsterCap do
    newSpawnSide=math.random(0,3)
    if monster[cm].alive==true then end
    if monster[cm].alive==false then
@@ -541,7 +542,7 @@ function spawnWest(cm)
 end
 
 function banish() --reset player, monsters, score, ammo
- for cm=1, 16 do
+ for cm=1, monsterCap do
     monster[cm].outOfBounds=true
  end
  rearm()
@@ -558,7 +559,7 @@ end
 
 function checkBulletCollision() --see if any beasts get shot
   for cb=1, 16 do
-    for cm=1, 16 do
+    for cm=1, monsterCap do
       if (bullet[cb].posit.x >= monster[cm].posit.x) and bullet[cb].active==true and monster[cm].alive==true then                             --if we're past the target's left edge in the X axis,
         if (bullet[cb].posit.x <= (monster[cm].posit.x + monster[cm].width)) then     --and we're not past its right edge,
           if (bullet[cb].posit.y >= monster[cm].posit.y) then                         --and we're lower than its top edge,
@@ -647,7 +648,7 @@ function checkPlayerCollision()-- with monsters and pickups TODO: find out why s
  if playerX1 <= pickupX2 and playerX2 >= pickupX1
   then if playerY1 <=pickupY2 and playerY2 >= pickupY1 then rearm() end
  end
- for cm=1, 16 do
+ for cm=1, monsterCap do
   if monster[cm].aggro==false then break end
   local monsterX1 = monster[cm].posit.x
   local monsterX2 = monster[cm].posit.x+monster[cm].width
