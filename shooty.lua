@@ -9,6 +9,8 @@ gt=0 --tics elapsed in current life
 debug=false --enable dev barf?
 markTime=false
 monsterCap=32
+baseBulletVelocity=4
+spread=100
 
 --control aliases
 PAD_UP=0
@@ -45,6 +47,7 @@ SPR_MONSTER=260
 SPR_AMMO_BOX=272
 SPR_SPAWN_SPARK=288
 SPR_AGGRO_SPARK=304
+SPR_KILL_SPARK=320
 --sound aliases
 GUNFIRE=0
 CLICK=1
@@ -67,6 +70,7 @@ MUZZLE_LEFT_X=0
 MUZZLE_LEFT_Y=4
 MUZZLE_RIGHT_X=8
 MUZZLE_RIGHT_Y=4
+
 
 player={--initial player stats
  aimLock=false,
@@ -97,6 +101,8 @@ bullet={}
 monster={}
 spawnSpark={}
 aggroSpark={}
+killSpark={}
+particle={}
 score=0
 seconds=0
 minutes=0
@@ -116,6 +122,7 @@ function TIC() --called 60 times per second
  drawBullet()
  drawMonster()
  drawItems()
+ --drawParticles()
  drawSparks()
  drawHUD()
  if not markTime==true then
@@ -124,6 +131,7 @@ function TIC() --called 60 times per second
   updateBullet() --move bullets
   updateMonster()--move beasts
   updateSparks() --delete sparks as needed
+  --updateParticles()
   checkBulletCollision()
   checkPlayerCollision()
   cullEntities() --do it twice per tic to be certain nothing outruns physics
@@ -183,23 +191,30 @@ function shoot()
   if not bullet[cb].active==true then
    bullet[cb].active=true
    bullet[cb].outOfBounds=false
-   bullet[cb].velocity=4
    bullet[cb].facing=player.facing
    if player.facing==UP then
     bullet[cb].posit.x=(player.posit.x+MUZZLE_UP_X)
     bullet[cb].posit.y=(player.posit.y+MUZZLE_UP_Y)
+    bullet[cb].xVelocity=(math.random(-spread,spread)*0.005)
+    bullet[cb].yVelocity=-baseBulletVelocity
    end
    if player.facing==DOWN then
     bullet[cb].posit.x=(player.posit.x+MUZZLE_DOWN_X)
     bullet[cb].posit.y=(player.posit.y+MUZZLE_DOWN_Y)
+    bullet[cb].xVelocity=(math.random(-spread,spread)*0.005)
+    bullet[cb].yVelocity=baseBulletVelocity
    end
    if player.facing==LEFT then
     bullet[cb].posit.x=(player.posit.x+MUZZLE_LEFT_X)
     bullet[cb].posit.y=(player.posit.y+MUZZLE_LEFT_Y)
+    bullet[cb].xVelocity=-baseBulletVelocity
+    bullet[cb].yVelocity=(math.random(-spread,spread)*0.005)
    end
    if player.facing==RIGHT then
     bullet[cb].posit.x=(player.posit.x+MUZZLE_RIGHT_X)
     bullet[cb].posit.y=(player.posit.y+MUZZLE_RIGHT_Y)
+    bullet[cb].xVelocity=baseBulletVelocity
+    bullet[cb].yVelocity=(math.random(-spread,spread)*0.005)
    end
    player.ammo=player.ammo-1
    sfx(GUNFIRE,'C-1',4,0,15,0)
@@ -246,14 +261,9 @@ end
 
 function updateBullet()
  for cb=1, 16 do
-  if bullet[cb].facing==UP and bullet[cb].active==true then
-    bullet[cb].posit.y=bullet[cb].posit.y-bullet[cb].velocity
-  elseif bullet[cb].facing==DOWN and bullet[cb].active==true then
-    bullet[cb].posit.y=bullet[cb].posit.y+bullet[cb].velocity
-  elseif bullet[cb].facing==LEFT and bullet[cb].active==true then
-    bullet[cb].posit.x=bullet[cb].posit.x-bullet[cb].velocity
-  elseif bullet[cb].facing==RIGHT and bullet[cb].active==true then
-    bullet[cb].posit.x=bullet[cb].posit.x+bullet[cb].velocity
+  if bullet[cb].active==true then
+    bullet[cb].posit.x=bullet[cb].posit.x+bullet[cb].xVelocity
+    bullet[cb].posit.y=bullet[cb].posit.y+bullet[cb].yVelocity
   end
   if bullet[cb].posit.x>239 then
      bullet[cb].outOfBounds=true
@@ -275,14 +285,16 @@ function cullEntities() --remove bullets that hit edges or monsters, and monster
    if bullet[cb].active==true and bullet[cb].outOfBounds==true then
     bullet[cb].posit.x=BRAZIL                                      
     bullet[cb].posit.y=BRAZIL                                      
-    bullet[cb].velocity=0
+    bullet[cb].xVelocity=0
+    bullet[cb].yVelocity=0
     bullet[cb].active=false
     bullet[cb].outOfBounds=false
    end
   if bullet[cb].hit==true then
     bullet[cb].posit.x=BRAZIL
     bullet[cb].posit.y=BRAZIL
-    bullet[cb].velocity=0
+    bullet[cb].xVelocity=0
+    bullet[cb].yVelocity=0
     bullet[cb].active=false
     bullet[cb].outOfBounds=false
     bullet[cb].hit=false
@@ -301,6 +313,7 @@ function cullEntities() --remove bullets that hit edges or monsters, and monster
      pickup.posit.x = monster[cm].posit.x
      pickup.posit.y = monster[cm].posit.y
     end
+    createKillSpark(monster[cm].posit.x,monster[cm].posit.y)
     monster[cm].posit.x=(BRAZIL-255) --keeping inactive beasts and bullets separate shouldn't matter
     monster[cm].posit.y=(BRAZIL-255) --if you're only checking collision between active entities.
     monster[cm].alive=false          --Collision here is cursed enough without being that specific, though.
@@ -340,7 +353,8 @@ end
 function setupBullets()
  for cb=1, 16 do --"cb" = "current bullet"
   bullet[cb]={ --initial bullet stats
-  velocity=0,
+  xVelocity=0,
+  yVelocity=0,
   length=2,
   colour=YELLOW,
   facing=UP,
@@ -382,7 +396,7 @@ function setupMonsters()
 end
 
 function setupSparks()
- for cS=1, 32 do --"current aggro spark"; we have 32 of these so they shouldn't run out
+ for cS=1, monsterCap do
   aggroSpark[cS]={
    active=false,
    stage=0,
@@ -394,6 +408,16 @@ function setupSparks()
    },
  }
   spawnSpark[cS]={
+   active=false,
+   stage=0,
+   nextUpdate=0,
+   frame=SPR_SPAWN_SPARK,
+   posit={
+    x=BRAZIL,
+    y=BRAZIL
+   },
+ }
+  killSpark[cS]={
    active=false,
    stage=0,
    nextUpdate=0,
@@ -581,9 +605,24 @@ function createAggroSpark(nASx, nASy)
    aggroSpark[cAS].active=true
    aggroSpark[cAS].stage=0
    aggroSpark[cAS].nextUpdate=gt+10
-   spawnSpark[cAS].frame=SPR_AGGRO_SPARK
+   aggroSpark[cAS].frame=SPR_AGGRO_SPARK
    aggroSpark[cAS].posit.x=nASx
    aggroSpark[cAS].posit.y=nASy
+   break
+  end
+ end
+end
+
+function createKillSpark(nKSx, nKSy)
+ for cKS=1, 32 do
+  if killSpark[cKS].active==true then end
+  if not killSpark[cKS].active==true then
+   killSpark[cKS].active=true
+   killSpark[cKS].stage=0
+   killSpark[cKS].nextUpdate=gt+5
+   killSpark[cKS].frame=SPR_KILL_SPARK
+   killSpark[cKS].posit.x=nKSx
+   killSpark[cKS].posit.y=nKSy
    break
   end
  end
@@ -618,11 +657,22 @@ function drawSparks()
    local aSparkY=aggroSpark[cS].posit.y
    spr(offsetASparkFrame,aSparkX,aSparkY,0)
   end
+  if killSpark[cS].active==true then
+   local offsetKSparkFrame=SPR_KILL_SPARK+killSpark[cS].stage
+   local kSparkX=killSpark[cS].posit.x
+   local kSparkY=killSpark[cS].posit.y
+   spr(offsetKSparkFrame,kSparkX,kSparkY,0)
+  end
  end
 end
 
 function updateSparks()
  for cS=1, 32 do
+  if killSpark[cS].active==true and gt>killSpark[cS].nextUpdate then
+   killSpark[cS].stage=killSpark[cS].stage+1
+   killSpark[cS].nextUpdate=killSpark[cS].nextUpdate+5
+  end
+    if killSpark[cS].stage>4 then killSpark[cS].active=false and killSpark[cS].stage==0 end
   if spawnSpark[cS].active==true and gt>spawnSpark[cS].nextUpdate then
    spawnSpark[cS].stage=spawnSpark[cS].stage+1
    spawnSpark[cS].nextUpdate=spawnSpark[cS].nextUpdate+5
