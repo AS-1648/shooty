@@ -53,6 +53,7 @@ GUNFIRE=0
 CLICK=1
 LOW_AMMO=2 --note: E-6
 PICKUP=3 --note: F#4
+SND_KILL=4 --note: A-4
 --facing aliases
 UP=0
 DOWN=1
@@ -122,7 +123,7 @@ function TIC() --called 60 times per second
  drawBullet()
  drawMonster()
  drawItems()
- --drawParticles()
+ drawParticles()
  drawSparks()
  drawHUD()
  if not markTime==true then
@@ -131,7 +132,7 @@ function TIC() --called 60 times per second
   updateBullet() --move bullets
   updateMonster()--move beasts
   updateSparks() --delete sparks as needed
-  --updateParticles()
+  updateParticles()
   checkBulletCollision()
   checkPlayerCollision()
   cullEntities() --do it twice per tic to be certain nothing outruns physics
@@ -313,7 +314,11 @@ function cullEntities() --remove bullets that hit edges or monsters, and monster
      pickup.posit.x = monster[cm].posit.x
      pickup.posit.y = monster[cm].posit.y
     end
+    local mpX = monster[cm].posit.x
+    local mpY= monster[cm].posit.y
+    createParticle(math.random(8,16),mpX,mpY,15,RED)
     createKillSpark(monster[cm].posit.x,monster[cm].posit.y)
+    sfx(SND_KILL,math.random(65,75),2,3,10,math.random(0,3))
     monster[cm].posit.x=(BRAZIL-255) --keeping inactive beasts and bullets separate shouldn't matter
     monster[cm].posit.y=(BRAZIL-255) --if you're only checking collision between active entities.
     monster[cm].alive=false          --Collision here is cursed enough without being that specific, though.
@@ -350,13 +355,20 @@ function drawHUD()
   print("SCOR: "..score,120,127,LIGHT_GREEN,false,1,false)
 end
 
+function drawParticles()
+ local cPL=#particle
+ for cP=1, cPL do
+  pix(particle[cP].positX, particle[cP].positY,particle[cP].colour)
+ end
+end
+
 function setupBullets()
  for cb=1, 16 do --"cb" = "current bullet"
   bullet[cb]={ --initial bullet stats
   xVelocity=0,
   yVelocity=0,
   length=2,
-  colour=YELLOW,
+  colour=CYAN,
   facing=UP,
   active=false,
   hit=false,
@@ -469,6 +481,15 @@ function updateMonster()
  end
 end--updateMonster()
 
+function updateParticles()
+ for cp=#particle, 1, -1 do
+  pairs(particle)
+  particle[cp].positX=particle[cp].positX+particle[cp].velocityX
+  particle[cp].positY=particle[cp].positY+particle[cp].velocityY
+  if gt>=particle[cp].expireTic then table.remove(particle,cp) end
+ end
+end
+
 function spawnController()
   for cm=1, monsterCap do
    newSpawnSide=math.random(0,3)
@@ -505,6 +526,7 @@ end
 
 function initialise()
  poke(0x03FF8, BLUE)-- set the border value in vram to blue
+ particle = {}
  setupSparks()
  setupBullets()
  setupMonsters()--company's coming, set the tables~
@@ -628,6 +650,19 @@ function createKillSpark(nKSx, nKSy)
  end
 end
 
+function createParticle(rP,nPX,nPY,nLS,nPC)
+ for pc= 1, rP do
+ local newParticle={}
+  newParticle.positX=nPX
+  newParticle.positY=nPY
+  newParticle.velocityX=math.random(-8,8)*0.13
+  newParticle.velocityY=math.random(-8,8)*0.13
+  newParticle.expireTic=gt+nLS
+  newParticle.colour=nPC
+  table.insert(particle,newParticle)
+ end
+end
+
 function createSpawnSpark(nSSx, nSSy)
  for cSS=1, 32 do
   if spawnSpark[cSS].active==true then end
@@ -709,3 +744,4 @@ function checkPlayerCollision()-- with monsters and pickups TODO: find out why s
   end
  end
 end
+
