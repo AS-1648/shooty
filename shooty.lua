@@ -63,14 +63,14 @@ RIGHT=3
 BRAZIL=-255
 
 --muzzle offsets
-MUZZLE_UP_X=4
-MUZZLE_UP_Y=0
-MUZZLE_DOWN_X=4
-MUZZLE_DOWN_Y=8
+MUZZLE_UP_X=2.8
+MUZZLE_UP_Y=4
+MUZZLE_DOWN_X=2.8
+MUZZLE_DOWN_Y=4
 MUZZLE_LEFT_X=0
-MUZZLE_LEFT_Y=4
-MUZZLE_RIGHT_X=8
-MUZZLE_RIGHT_Y=4
+MUZZLE_LEFT_Y=2.7
+MUZZLE_RIGHT_X=4
+MUZZLE_RIGHT_Y=2.7
 
 
 player={--initial player stats
@@ -119,6 +119,7 @@ function TIC() --called 60 times per second
  clock() --turn tick counter into people time
  cls(0) --screen refresh
  borderWatch() --keep player in bounds
+-- drawPlayerHitbox()
  drawPlayer()
  drawBullet()
  drawMonster()
@@ -391,9 +392,9 @@ function setupMonsters()
    outOfBounds=true,
    colour=0,
    aggro=false,
-   speed=1.3,
-   retargetInterval=math.random(0,120), --how many tics since last player posit check must pass before the next check
-   trackingError=math.random(0,20), --how much the target posit can deviate from player posit
+   speed=1.3+(math.random(0,1)*0.5),
+   retargetInterval=math.random(0,180), --how many tics since last player posit check must pass before the next check
+   trackingError=math.random(0,30), --how much the target posit can deviate from player posit
    nextRecheck=0,
    targetPosit={
     x=0,
@@ -745,3 +746,10 @@ function checkPlayerCollision()-- with monsters and pickups TODO: find out why s
  end
 end
 
+function drawPlayerHitbox()
+ local playerX=player.posit.x
+ local playerW=player.width
+ local playerY=player.posit.y
+ local playerH=player.height
+ rect(playerX,playerY,playerW,playerH,ORANGE)
+end
