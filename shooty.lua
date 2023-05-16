@@ -11,6 +11,8 @@ markTime=false
 monsterCap=32
 baseBulletVelocity=4
 spread=100
+screenXOffset=0
+screenYOffset=0
 
 --control aliases
 PAD_UP=0
@@ -119,7 +121,6 @@ function TIC() --called 60 times per second
  clock() --turn tick counter into people time
  cls(0) --screen refresh
  borderWatch() --keep player in bounds
--- drawPlayerHitbox()
  drawPlayer()
  drawBullet()
  drawMonster()
@@ -141,6 +142,10 @@ function TIC() --called 60 times per second
   end
  sniffControls() --accept input
  if debug==true then debugHUD() end
+ if screenYOffset>0 then screenYOffset=screenYOffset-0.1 end
+ if screenYOffset<0 then screenYOffset=screenYOffset+0.1 end
+ if screenXOffset>0 then screenXOffset=screenXOffset-0.1 end
+ if screenXOffset<0 then screenXOffset=screenXOffset+0.1 end
 end
 
 function clock()
@@ -191,6 +196,8 @@ function shoot()
  for cb=1, 16 do
   if bullet[cb].active==true then end
   if not bullet[cb].active==true then
+   screenXOffset=(math.random(-200,200)*.01)
+   screenYOffset=(math.random(-200,200)*.01)
    bullet[cb].active=true
    bullet[cb].outOfBounds=false
    bullet[cb].facing=player.facing
@@ -219,7 +226,8 @@ function shoot()
     bullet[cb].yVelocity=(math.random(-spread,spread)*0.005)
    end
    player.ammo=player.ammo-1
-   sfx(GUNFIRE,'C-1',4,0,15,0)
+   sfx(GUNFIRE,'F-1',6,0,15,0)
+   sfx(16,'C-1',6,3,15,0)
    break
   end
  end
@@ -227,17 +235,19 @@ end
 ----
 function drawBullet()
  for cb=1, 16 do
+  local drawPosX= bullet[cb].posit.x+screenXOffset
+  local drawPosY= bullet[cb].posit.y+screenYOffset
   if bullet[cb].facing==UP then
-  line(bullet[cb].posit.x,bullet[cb].posit.y,bullet[cb].posit.x,bullet[cb].posit.y-bullet[cb].length,bullet[cb].colour)
+  line(drawPosX,drawPosY,drawPosX,drawPosY-bullet[cb].length,bullet[cb].colour)
   end
   if bullet[cb].facing==DOWN then
-  line(bullet[cb].posit.x,bullet[cb].posit.y,bullet[cb].posit.x,bullet[cb].posit.y+bullet[cb].length,bullet[cb].colour)
+  line(drawPosX,drawPosY,drawPosX,drawPosY+bullet[cb].length,bullet[cb].colour)
   end
   if bullet[cb].facing==LEFT then
-  line(bullet[cb].posit.x,bullet[cb].posit.y,bullet[cb].posit.x-bullet[cb].length,bullet[cb].posit.y,bullet[cb].colour)
+  line(drawPosX,drawPosY,drawPosX-bullet[cb].length,drawPosY,bullet[cb].colour)
   end
   if bullet[cb].facing==RIGHT then
-  line(bullet[cb].posit.x,bullet[cb].posit.y,bullet[cb].posit.x+bullet[cb].length,bullet[cb].posit.y,bullet[cb].colour)
+  line(drawPosX,drawPosY,drawPosX+bullet[cb].length,drawPosY,bullet[cb].colour)
   end
  end
 end
@@ -245,19 +255,19 @@ end
 ----
 function drawPlayer()
  if player.facing==UP then 
-  spr(SPR_PLAYER_UP,player.posit.x,player.posit.y,0,1,0,0,1,1)
+  spr(SPR_PLAYER_UP,(player.posit.x+screenXOffset),(player.posit.y+screenYOffset),0,1,0,0,1,1)
  elseif player.facing==DOWN then 
-  spr(SPR_PLAYER_DOWN,player.posit.x,player.posit.y,0,1,0,0,1,1)
+  spr(SPR_PLAYER_DOWN,(player.posit.x+screenXOffset),(player.posit.y+screenYOffset),0,1,0,0,1,1)
  elseif player.facing==LEFT then 
-  spr(SPR_PLAYER_LEFT,player.posit.x,player.posit.y,0,1,0,0,1,1)
+  spr(SPR_PLAYER_LEFT,(player.posit.x+screenXOffset),(player.posit.y+screenYOffset),0,1,0,0,1,1)
  elseif player.facing==RIGHT then 
-  spr(SPR_PLAYER_RIGHT,player.posit.x,player.posit.y,0,1,0,0,1,1)
+  spr(SPR_PLAYER_RIGHT,(player.posit.x+screenXOffset),(player.posit.y+screenYOffset),0,1,0,0,1,1)
  end
 end
 ----
 function drawMonster()
   for cm=1, monsterCap do
-    rect(monster[cm].posit.x,monster[cm].posit.y,monster[cm].width,monster[cm].height,monster[cm].colour)
+    rect((monster[cm].posit.x+screenXOffset),(monster[cm].posit.y+screenYOffset),monster[cm].width,monster[cm].height,monster[cm].colour)
   end
 end
 
@@ -335,7 +345,7 @@ function cullEntities() --remove bullets that hit edges or monsters, and monster
 end
 
 function drawItems()
- spr(SPR_AMMO_BOX,pickup.posit.x,pickup.posit.y,0)
+ spr(SPR_AMMO_BOX,(pickup.posit.x+screenXOffset),(pickup.posit.y+screenYOffset),0)
 end
 
 function drawHUD()
@@ -359,7 +369,7 @@ end
 function drawParticles()
  local cPL=#particle
  for cP=1, cPL do
-  pix(particle[cP].positX, particle[cP].positY,particle[cP].colour)
+  pix((particle[cP].positX+screenXOffset), (particle[cP].positY+screenYOffset),particle[cP].colour)
  end
 end
 
@@ -515,6 +525,7 @@ function debugHUD()
     print("B"..ce..": "..bullet[ce].posit.x..", "..bullet[ce].posit.y,0,(ce*8),BULLET_STATE_COLOUR,true,1,true)
     print("M"..ce..": "..monster[ce].posit.x..", "..monster[ce].posit.y,80,(ce*8),DARK_GREY,true,1,true)
   end
+  drawPlayerHitbox()
 end
 
 function restart()
@@ -527,11 +538,13 @@ end
 
 function initialise()
  poke(0x03FF8, BLUE)-- set the border value in vram to blue
+ player.posit.x=120
+ player.posit.y=68
  particle = {}
  setupSparks()
  setupBullets()
  setupMonsters()--company's coming, set the tables~
- spawnInterval=4 --try to spawn a monster every 4 tics when starting
+ spawnInterval=30 --try to spawn a monster every 30 tics when starting
  monstersSpawned=0
  nextSpawn=t --start spawning immediately
  markTime=false
@@ -612,7 +625,7 @@ function checkBulletCollision() --see if any beasts get shot
           if (bullet[cb].posit.y >= monster[cm].posit.y) then                         --and we're lower than its top edge,
             if (bullet[cb].posit.y <= (monster[cm].posit.y + monster[cm].height)) then--but higher than its bottom edge
               monster[cm].hit=true                                                    --i hate looking at this but it works...
-              bullet[cb].hit=true  
+            --  bullet[cb].hit=true  
             break end--so the reason bullets weren't being culled when they should is because i had [cm] on both of these
           end        --and shots'd only be culled if the monster and bullet colliding had the same index
         end
